@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amazon Product Research Agent</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: Arial, sans-serif; background: #f3f6fb;
+      color: #1f2937; min-height: 100vh; display: grid; place-items: center; padding: 24px;
+    }
+    .app { width: min(760px, 100%); background: white; border-radius: 18px;
+      box-shadow: 0 12px 35px rgba(31,41,55,.10); overflow: hidden; }
+    header { background: #172554; color: white; padding: 28px; }
+    header h1 { margin: 0 0 8px; font-size: 25px; }
+    header p { margin: 0; color: #dbeafe; line-height: 1.5; }
+    main { padding: 28px; }
+    label { display: block; font-weight: 700; margin: 0 0 8px; }
+    input, select { width: 100%; padding: 13px 14px; border: 1px solid #cbd5e1;
+      border-radius: 9px; font-size: 15px; background: white; }
+    .fields { display: grid; grid-template-columns: 1fr 130px; gap: 14px; margin-bottom: 18px; }
+    button { border: 0; border-radius: 9px; padding: 14px 20px; font-size: 15px;
+      font-weight: 700; cursor: pointer; background: #f59e0b; color: #111827; }
+    button:disabled { opacity: .6; cursor: wait; }
+    .status { margin: 18px 0; padding: 12px 14px; background: #eff6ff;
+      border-radius: 9px; color: #1e40af; display: none; line-height: 1.5; }
+    .results { margin-top: 22px; }
+    .results h2 { font-size: 19px; margin-bottom: 12px; }
+    .product { border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px;
+      margin-bottom: 10px; line-height: 1.5; }
+    .product strong { display: block; margin-bottom: 4px; }
+    .recommendation { background: #ecfdf5; border: 1px solid #a7f3d0;
+      border-radius: 10px; padding: 16px; margin-top: 16px; line-height: 1.6; }
+    .note { color: #64748b; font-size: 13px; line-height: 1.5; margin-top: 22px; }
+    @media (max-width: 520px) { .fields { grid-template-columns: 1fr; } main { padding: 20px; } }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>Amazon Product Research Agent</h1>
+      <p>Search Amazon India, review the top products, and get an AI recommendation.</p>
+    </header>
+    <main>
+      <form id="searchForm">
+        <div class="fields">
+          <div>
+            <label for="keyword">Product to search</label>
+            <input id="keyword" name="keyword" value="wireless mouse under 1000"
+                   placeholder="e.g. wireless mouse under 1000" required>
+          </div>
+          <div>
+            <label for="limit">Products to review</label>
+            <select id="limit" name="limit">
+              <option>3</option><option selected>5</option><option>10</option>
+            </select>
+          </div>
+        </div>
+        <button id="runButton" type="submit">Run product research</button>
+      </form>
+
+      <div id="status" class="status" role="status"></div>
+      <section id="output" class="results" aria-live="polite"></section>
+
+      <p class="note">
+        This page is the HTML user interface. To perform the actual Amazon browsing and
+        Gemini analysis, connect it to a Python backend running Playwright and the Google
+        GenAI SDK. A browser-only HTML file cannot securely run those Python libraries or
+        access your Gemini API key.
+      </p>
+    </main>
+  </div>
+
+  <script>
+    const form = document.getElementById('searchForm');
+    const button = document.getElementById('runButton');
+    const statusBox = document.getElementById('status');
+    const output = document.getElementById('output');
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const keyword = document.getElementById('keyword').value.trim();
+      const limit = Number(document.getElementById('limit').value);
+      if (!keyword) return;
+
+      button.disabled = true;
+      button.textContent = 'Researching...';
+      statusBox.style.display = 'block';
+      statusBox.textContent = 'Connecting to the Python agent...';
+      output.innerHTML = '';
+
+      try {
+        // Your Python backend should expose POST /run-agent and return:
+        // { "products": [{"title":"...", "price":"..."}], "recommendation":"..." }
+        const response = await fetch('/run-agent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ keyword, limit })
+        });
+        if (!response.ok) throw new Error(`Server returned ${response.status}`);
+        const data = await response.json();
+
+        statusBox.textContent = 'Research completed.';
+        const heading = document.createElement('h2');
+        heading.textContent = 'Top products';
+        output.appendChild(heading);
+
+        (data.products || []).forEach((product, index) => {
+          const card = document.createElement('div');
+          card.className = 'product';
+          const title = document.createElement('strong');
+          title.textContent = `${index + 1}. ${product.title || 'Title unavailable'}`;
+          const price = document.createElement('span');
+          price.textContent = product.price || 'Price unavailable';
+          card.append(title, price);
+          output.appendChild(card);
+        });
+
+        if (data.recommendation) {
+          const recommendation = document.createElement('div');
+          recommendation.className = 'recommendation';
+          const title = document.createElement('strong');
+          title.textContent = 'AI recommendation';
+          recommendation.append(title, document.createTextNode(data.recommendation));
+          output.appendChild(recommendation);
+        }
+      } catch (error) {
+        statusBox.textContent =
+          'The HTML page is ready, but the Python backend is not connected or could not be reached. ' +
+          'Start the backend and try again. Details: ' + error.message;
+      } finally {
+        button.disabled = false;
+        button.textContent = 'Run product research';
+      }
+    });
+  </script>
+</body>
+</html>
